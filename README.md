@@ -20,14 +20,21 @@ Features
 
 -   Define Magnet geometry as yaml files
 -   Load/Create CAD and Mesh with Salome (see hifimagnet.salome)
--   Create Gmsh mesh from Salome XAO format
+
+INSTALL
+=======
+
+To install in a python virtual env
+
+```
+python -m venv --system-site-packages magnetgeo-env
+source ./magnetgeo-env/bin/activate
+pip install -r requirements.txt
+```
 
 Examples
 ========
 
-```
-python3 -m python_magnetgeo.xao --wd /data/geometries Pancakes-pancake-Axi.xao mesh --geo HTS-pancake-test.yaml []
-```
 
 Credits
 =======

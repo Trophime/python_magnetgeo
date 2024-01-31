@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = [ 'lxml', 'gmsh>=4.8.4', 'pyyaml', ]
+requirements = [ 'pyyaml', "chevron" ]
 
 setup_requirements = ['pytest-runner', ]
 
@@ -32,12 +32,7 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     description="Python Magnet Geometry contains maget geometrical models",
-    entry_points={
-        'console_scripts': [
-            'python_magnetgeo=python_magnetgeo.cli:main',
-            'python_xao2gmsh=python_magnetgeo.xao:main',
-        ],
-    },
+    entry_points={},
     install_requires=requirements,
     license="MIT license",
     long_description=readme + '\n\n' + history,
@@ -49,6 +44,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/Trophime/python_magnetgeo',
-    version='0.1.0',
+    version='0.3.1',
     zip_safe=False,
 )

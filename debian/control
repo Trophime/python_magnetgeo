@@ -6,9 +6,7 @@ Build-Depends: debhelper-compat (= 12),
  dh-python,
  python3-setuptools,
  python3-all,
- python3-gmsh,
  python3-yaml,
- python3-lxml,
  python3-pytest-runner
 Standards-Version: 4.6.0
 Homepage: https://github.com/Trophime/python_magnetgeo

@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM debian:11
 
 USER root
 
@@ -30,7 +30,7 @@ RUN apt-get update \
     && apt-get -y install build-essential \
     && apt-get -y install g++ cmake \
     #\
-    && apt-get -y install python3-minimal libpython3.8-dev swig \
+    && apt-get -y install python3-minimal libpython3-dev swig \
     && apt-get -y install python-is-python3 python3-pip python3-jinja2 \
     && apt-get -y install python3-autopep8 black yapf3 python3-bandit flake8 pydocstyle pylint python3-pytest mypy \
     && apt-get -y install python3-nlopt python3-tabulate python3-yaml \
@@ -51,17 +51,15 @@ RUN apt-get update \
     && mkdir ~vscode/.ssh/ \
     && ssh-keyscan github.com >> ~vscode/.ssh/known_hosts \
     && chown -R vscode.$USER_GID ~vscode/.ssh
-    
-# install prerequistes from Lncmi debian repo 
+
+# install prerequistes from Lncmi debian repo
 RUN apt update \
     && apt-get install -y lsb-release \
     && apt-get install -y debian-keyring \
     && cp /usr/share/keyrings/debian-maintainers.gpg /etc/apt/trusted.gpg.d \
-    && echo "deb http://euler.GRENOBLE.LNCMI.LOCAL/~trophime/debian/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/lncmi.list
-
-RUN apt-get -y install python3-nptdms python3-freesteam python3-nlopt python3-tabulate \
-    && apt-get -y install python3-ht python3-pyclaw python3-yaml  \
-    && apt-get -y install python3-chevron python3-magnettools python3-magnetsetup
+    && echo "deb http://euler.lncmig.local/~christophe.trophime@LNCMIG.local/debian/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/lncmi.list \
+    && apt update \
+    && apt-get -y install python3-chevron
 
 # Install latest gsh dev version (support for BoundingBox) ?
 #RUN python3 -m pip install -i https://gmsh.info/python-packages --force-reinstall --no-cache-dir gmsh-dev

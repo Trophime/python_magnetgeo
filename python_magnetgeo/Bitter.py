@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
 """
 Provides definition for Bitter:
@@ -8,12 +8,16 @@ Provides definition for Bitter:
 * Model Axi: definition of helical cut (provided from MagnetTools)
 * Model 3D: actual 3D CAD
 """
+from typing import List
 
 import json
 import yaml
 from . import deserialize
 
-from . import ModelAxi
+from .ModelAxi import ModelAxi
+from .coolingslit import CoolingSlit
+from .tierod import Tierod
+
 
 class Bitter(yaml.YAMLObject):
     """
@@ -22,39 +26,154 @@ class Bitter(yaml.YAMLObject):
     z :
 
     axi :
+    coolingslits: [(r, angle, n, dh, sh, shape)]
+    tierods: [r, n, shape]
     """
 
-    yaml_tag = 'Bitter'
+    yaml_tag = "Bitter"
 
-    def __init__(self, name, r=[], z=[], axi=ModelAxi.ModelAxi()):
+    def __init__(
+        self,
+        name,
+        r: List[float],
+        z: List[float],
+        odd: bool,
+        axi: ModelAxi,
+        coolingslits: List[CoolingSlit],
+        tierod: Tierod,
+        innerbore: float,
+        outerbore: float,
+    ) -> None:
         """
         initialize object
         """
         self.name = name
         self.r = r
         self.z = z
+        self.odd = odd
         self.axi = axi
+        self.innerbore = innerbore
+        self.outerbore = outerbore
+        self.coolingslits = coolingslits
+        self.tierod = tierod
+
+    def equivalent_eps(self, i: int):
+        """
+        eps: thickness of annular ring equivalent to n * coolingslit surface
+        """
+        from math import pi
+
+        slit = self.coolingslits[i]
+        x = slit.r
+        eps = slit.n * slit.sh / (2 * pi * x)
+        return eps
+
+    def get_channels(
+        self, mname: str, hideIsolant: bool = True, debug: bool = False
+    ) -> List[str]:
+        """
+        return channels
+        """
+        prefix = ""
+        if mname:
+            prefix = f"{mname}_"
+
+        Channels = [f"{prefix}Slit{0}"]
+        n_slits = 0
+        if self.coolingslits:
+            n_slits = len(self.coolingslits)
+            print(f"Bitter({self.name}): CoolingSlits={n_slits}")
+
+            Channels += [f"{prefix}Slit{i+1}" for i in range(n_slits)]
+        Channels += [f"{prefix}Slit{n_slits+1}"]
+        print(f"Bitter({prefix}): {Channels}")
+        return Channels
+
+    def get_lc(self) -> float:
+        lc = (self.r[1] - self.r[0]) / 10.0
+        if self.coolingslits:
+            x: float = self.r[0]
+            dr: List[float] = []
+            for slit in self.coolingslits:
+                _x = slit.r
+                dr.append(_x - x)
+                x = _x
+            dr.append(self.r[1] - x)
+            # print(f"Bitter: dr={dr}")
+            lc = min(dr) / 5.0
+
+        return lc
+
+    def get_isolants(self, mname: str, debug: bool = False) -> List[str]:
+        """
+        return isolants
+        """
+        return []
+
+    def get_names(
+        self, mname: str, is2D: bool = False, verbose: bool = False
+    ) -> List[str]:
+        """
+        return names for Markers
+        """
+        tol = 1.0e-10
+        solid_names = []
+
+        prefix = ""
+        if mname:
+            prefix = f"{mname}_"
+
+        Nslits = 0
+        if self.coolingslits:
+            Nslits = len(self.coolingslits)
+
+        if is2D:
+            nsection = len(self.axi.turns)
+            if self.z[0] < -self.axi.h and abs(self.z[0] + self.axi.h) >= tol:
+                for i in range(Nslits + 1):
+                    solid_names.append(f"{prefix}B0_Slit{i}")
+
+            for j in range(nsection):
+                for i in range(Nslits + 1):
+                    solid_names.append(f"{prefix}B{j+1}_Slit{i}")
+
+            if self.z[1] > self.axi.h and abs(self.z[1] - self.axi.h) >= tol:
+                for i in range(Nslits + 1):
+                    solid_names.append(f"{prefix}B{nsection+1}_Slit{i}")
+        else:
+            solid_names.append(f"{prefix}B")
+            solid_names.append(f"{prefix}Kapton")
+        if verbose:
+            print(f"Bitter/get_names: solid_names {len(solid_names)}")
+        return solid_names
 
     def __repr__(self):
         """
         representation of object
         """
-        return "%s(name=%r, r=%r, z=%r, axi=%r)" % \
-               (self.__class__.__name__,
+        return (
+            "%s(name=%r, r=%r, z=%r, odd=%r, axi=%r, coolingslits=%r, tierod=%r, innerbore=%r, outerbore=%r)"
+            % (
+                self.__class__.__name__,
                 self.name,
                 self.r,
                 self.z,
-                self.axi
-               )
+                self.odd,
+                self.axi,
+                self.coolingslits,
+                self.tierod,
+                self.innerbore,
+                self.outerbore,
+            )
+        )
 
     def dump(self):
         """
         dump object to file
         """
         try:
-            ostream = open(self.name + '.yaml', 'w')
-            yaml.dump(self, stream=ostream)
-            ostream.close()
+            with open(f"{self.name}.yaml", "w") as ostream:
+                yaml.dump(self, stream=ostream)
         except:
             raise Exception("Failed to Bitter dump")
 
@@ -64,23 +183,28 @@ class Bitter(yaml.YAMLObject):
         """
         data = None
         try:
-            istream = open(self.name + '.yaml', 'r')
-            data = yaml.load(stream=istream)
-            istream.close()
+            with open(f"{self.name}.yaml", "r") as istream:
+                data = yaml.load(stream=istream, Loader=yaml.FullLoader)
         except:
-            raise Exception("Failed to load Bitter data %s.yaml"%self.name)
+            raise Exception(f"Failed to load Bitter data {self.name}.yaml")
 
         self.name = data.name
         self.r = data.r
         self.z = data.z
+        self.odd = data.odd
         self.axi = data.axi
+        self.coolingslits = data.coolingslits
+        self.tierod = data.tierod
+        self.innerbore = data.innerbore
+        self.outerbore = data.outerbore
 
     def to_json(self):
         """
         convert from yaml to json
         """
-        return json.dumps(self, default=deserialize.serialize_instance, sort_keys=True, indent=4)
-
+        return json.dumps(
+            self, default=deserialize.serialize_instance, sort_keys=True, indent=4
+        )
 
     def from_json(self, string):
         """
@@ -92,179 +216,100 @@ class Bitter(yaml.YAMLObject):
         """
         write from json file
         """
-        ostream = open(self.name + '.json', 'w')
-        jsondata = self.to_json()
-        ostream.write(str(jsondata))
-        ostream.close()
+        with open(f"{self.name}.json", "w") as ostream:
+            jsondata = self.to_json()
+            ostream.write(jsondata)
 
     def read_from_json(self):
         """
         read from json file
         """
-        istream = open(self.name + '.json', 'r')
-        jsondata = self.from_json(istream.read())
-        print (type(jsondata))
-        istream.close()
+        with open(f"{self.name}.json", "r") as istream:
+            jsondata = self.from_json(istream.read())
 
-    def get_Nturns(self):
+    def get_Nturns(self) -> float:
         """
         returns the number of turn
         """
         return self.axi.get_Nturns()
 
-    def boundingBox(self):
+    def boundingBox(self) -> tuple:
         """
         return Bounding as r[], z[]
         """
-        
+
         return (self.r, self.z)
 
-    def intersect(self, r, z):
+    def intersect(self, r: List[float], z: List[float]) -> bool:
         """
         Check if intersection with rectangle defined by r,z is empty or not
-        
+
         return False if empty, True otherwise
         """
-        
+
         # TODO take into account Mandrin and Isolation even if detail="None"
         collide = False
-        isR = abs(self.r[0] - r[0]) < abs(self.r[1]-self.r[0] + r[0] + r[1]) /2.
-        isZ = abs(self.z[0] - z[0]) < abs(self.z[1]-self.z[0] + z[0] + z[1]) /2.
+        isR = abs(self.r[0] - r[0]) < abs(self.r[1] - self.r[0] + r[0] + r[1]) / 2.0
+        isZ = abs(self.z[0] - z[0]) < abs(self.z[1] - self.z[0] + z[0] + z[1]) / 2.0
         if isR and isZ:
             collide = True
         return collide
 
-    def gmsh(self, AirData=None, debug=False):
+    def get_params(self, workingDir: str = ".") -> tuple:
+        from math import pi
+
+        tol = 1.0e-10
+
+        Dh = [2 * (self.r[0] - self.innerbore)]
+        Sh = [pi * (self.r[0] - self.innerbore) * (self.r[0] + self.innerbore)]
+        filling_factor = [1]
+        nslits = 0
+        if self.coolingslits:
+            nslits = len(self.coolingslits)
+            Dh += [slit.dh for slit in self.coolingslits]
+            # Dh += [2 * self.equivalent_eps(n) for n in range(len(self.coolingslits))]
+            Sh += [slit.n * slit.sh for slit in self.coolingslits]
+
+            # wetted perimeter per slit: (4*slit.sh)/slit.dh
+            # wetted perimeter for annular ring: 2*pi*(slit.r-eps) + 2*pi*(slit.r+eps)
+            # with eps = self.equivalent_eps(n)
+            filling_factor += [
+                slit.n * ((4 * slit.sh) / slit.dh) / (4 * pi * slit.r)
+                for slit in self.coolingslits
+            ]
+        Dh += [2 * (self.outerbore - self.r[1])]
+        Sh += [pi * (self.outerbore - self.r[1]) * (self.outerbore + self.r[1])]
+
+        Zh = [self.z[0]]
+        z = -self.axi.h
+        if abs(self.z[0] - z) >= tol:
+            Zh.append(z)
+        for n, p in zip(self.axi.turns, self.axi.pitch):
+            z += n * p
+            Zh.append(z)
+        if abs(self.z[1] - z) >= tol:
+            Zh.append(self.z[1])
+        print(f"Zh={Zh}")
+
+        filling_factor.append(1)
+        print(f"filling_factor={filling_factor}")
+
+        # return (nslits, Dh, Sh, Zh)
+        return (nslits, Dh, Sh, Zh, filling_factor)
+
+    def create_cut(self, format: str):
         """
-        create gmsh geometry
+        create cut files
         """
-        import gmsh
 
-        gmsh_ids = []
-        x = self.r[0]
-        dr = self.r[1] - self.r[0]
-        y = -self.axi.h
-        for i, (n, pitch) in enumerate(zip(self.axi.turns, self.axi.pitch)):
-            dz = n * pitch
-            _id = gmsh.model.occ.addRectangle(x, y, 0, dr, dz)
-            gmsh_ids.append(_id)
-                
-            y += dz
+        z0 = self.axi.h
+        sign = 1
+        if self.odd:
+            sign = -1
 
-        # Now create air
-        if AirData:
-            r0_air = 0
-            dr_air = self.r[1] * AirData[0]
-            z0_air = y * AirData[1]
-            dz_air = (2 * abs(y) ) * AirData[1]    
-            _id = gmsh.model.occ.addRectangle(r0_air, z0_air, 0, dr_air, dz_air)
-        
-            ov, ovv = gmsh.model.occ.fragment([(2, _id)], [(2, i) for i in gmsh_ids] )
-            return (gmsh_ids, (_id, dr_air, z0_air, dz_air))
+        self.axi.create_cut(format, z0, sign, self.name)
 
-        return (gmsh_ids, None)
 
-    def gmsh_bcs(self, ids: tuple, debug=False):
-        """
-        retreive ids for bcs in gmsh geometry
-        """
-        import gmsh
-
-        defs = {}
-        (B_ids, Air_data) = ids
-
-        # set physical name
-        for i,id in enumerate(B_ids):
-            ps = gmsh.model.addPhysicalGroup(2, [id])
-            gmsh.model.setPhysicalName(2, ps, "%s_Cu%d" % (self.name, i))
-            defs["%s_Cu%d" % (self.name,i) ] = ps
-        
-        # get BC ids
-        gmsh.option.setNumber("Geometry.OCCBoundsUseStl", 1)
-
-        # TODO: if z[xx] < 0 multiply by 1+eps to get a min by 1-eps to get a max
-        eps = 1.e-3
-        ov = gmsh.model.getEntitiesInBoundingBox(self.r[0]* (1-eps), (self.z[0])* (1+eps), 0,
-                                                 self.r[-1]* (1+eps), (self.z[0])* (1-eps), 0, 1)
-        ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-        gmsh.model.setPhysicalName(1, ps, "%s_HP" % self.name)
-        defs["%s_HP" % self.name] = ps
-        
-        ov = gmsh.model.getEntitiesInBoundingBox(self.r[0]* (1-eps), (self.z[-1])* (1-eps), 0,
-                                                 self.r[-1]* (1+eps), (self.z[-1])* (1+eps), 0, 1)
-        ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-        gmsh.model.setPhysicalName(1, ps, "%s_BP" % self.name)
-        defs["%s_BP" % self.name] = ps
-        
-        ov = gmsh.model.getEntitiesInBoundingBox(self.r[0]* (1-eps), self.z[0]* (1+eps), 0,
-                                                 self.r[0]* (1+eps), self.z[1]* (1+eps), 0, 1)
-        r0_bc_ids = [tag for (dim,tag) in ov]
-        if debug:
-            print("r0_bc_ids:", len(r0_bc_ids), 
-                     self.r[0]* (1-eps), self.z[0]* (1+eps),
-                     self.r[0]* (1+eps), self.z[1]* (1+eps))
-        ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-        gmsh.model.setPhysicalName(1, ps, "%s_Rint" % self.name)
-        defs["%s_Rint" % self.name] = ps
-
-        ov = gmsh.model.getEntitiesInBoundingBox(self.r[1]* (1-eps), self.z[0]* (1+eps), 0,
-                                                 self.r[1]* (1+eps), self.z[1]* (1+eps), 0, 1)
-        r1_bc_ids = [tag for (dim,tag) in ov]
-        if debug:
-            print("r1_bc_ids:", len(r1_bc_ids))
-        ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-        gmsh.model.setPhysicalName(1, ps, "%s_Rext" % self.name)
-        defs["%s_Rext" % self.name] = ps
-
-        # TODO: Air
-        if Air_data:
-            (Air_id, dr_air, z0_air, dz_air) = Air_data
-
-            ps = gmsh.model.addPhysicalGroup(2, [Air_id])
-            gmsh.model.setPhysicalName(2, ps, "Air")
-            defs["Air"] = ps
-            # TODO: Axis, Inf
-            gmsh.option.setNumber("Geometry.OCCBoundsUseStl", 1)
-            
-            eps = 1.e-6
-            
-            ov = gmsh.model.getEntitiesInBoundingBox(-eps, z0_air-eps, 0, +eps, z0_air+dz_air+eps, 0, 1)
-            print("ov:", len(ov))
-            ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-            gmsh.model.setPhysicalName(1, ps, "ZAxis")
-            defs["ZAxis" % self.name] = ps
-            
-            ov = gmsh.model.getEntitiesInBoundingBox(-eps, z0_air-eps, 0, dr_air+eps, z0_air+eps, 0, 1)
-            print("ov:", len(ov))
-            
-            ov += gmsh.model.getEntitiesInBoundingBox(dr_air-eps, z0_air-eps, 0, dr_air+eps, z0_air+dz_air+eps, 0, 1)
-            print("ov:", len(ov))
-            
-            ov += gmsh.model.getEntitiesInBoundingBox(-eps, z0_air+dz_air-eps, 0, dr_air+eps, z0_air+dz_air+eps, 0, 1)
-            print("ov:", len(ov))
-            
-            ps = gmsh.model.addPhysicalGroup(1, [tag for (dim,tag) in ov])
-            gmsh.model.setPhysicalName(1, ps, "Infty")
-            defs["Infty" % self.name] = ps            
-
-        return defs
-
-    def gmsh_msh(self, defs: dict = {}, lc: list=[]):
-        print("TODO: set characteristic lengths")
-        """
-        lcar = (nougat.getR1() - nougat.R(0) ) / 10.
-        lcar_dp = nougat.dblpancakes[0].getW() / 10.
-        lcar_p = nougat.dblpancakes[0].getPancake().getW() / 10.
-        lcar_tape = nougat.dblpancakes[0].getPancake().getW()/3.
-
-        gmsh.model.mesh.setSize(gmsh.model.getEntities(0), lcar)
-        # Override this constraint on the points of the tapes:
-
-        gmsh.model.mesh.setSize(gmsh.model.getBoundary(tapes, False, False, True), lcar_tape)
-        """
-        pass
-    
-    
 def Bitter_constructor(loader, node):
     """
     build an bitter object
@@ -273,9 +318,47 @@ def Bitter_constructor(loader, node):
     name = values["name"]
     r = values["r"]
     z = values["z"]
+    odd = values["odd"]
     axi = values["axi"]
+    coolingslits = values["coolingslits"]
+    tierod = values["tierod"]
+    innerbore = 0
+    if "innerbore":
+        innerbore = values["innerbore"]
+    outerbore = 0
+    if "outerbore":
+        outerbore = values["outerbore"]
 
-    return Bitter(name, r, z, axi)
+    return Bitter(name, r, z, odd, axi, coolingslits, tierod, innerbore, outerbore)
 
-yaml.add_constructor(u'!Bitter', Bitter_constructor)
 
+yaml.add_constructor("!Bitter", Bitter_constructor)
+
+if __name__ == "__main__":
+    from .Shape2D import Shape2D
+
+    Square = Shape2D("square", [[0, 0], [1, 0], [1, 1], [0, 1]])
+    dh = 4 * 1
+    sh = 1 * 1
+    tierod = Tierod(2, 20, dh, sh, Square)
+
+    Square = Shape2D("square", [[0, 0], [1, 0], [1, 1], [0, 1]])
+    slit1 = CoolingSlit(2, 5, 20, 0.1, 0.2, Square)
+    slit2 = CoolingSlit(10, 5, 20, 0.1, 0.2, Square)
+    coolingSlits = [slit1, slit2]
+
+    Axi = ModelAxi("test", 0.9, [2], [0.9])
+
+    innerbore = 1 - 0.01
+    outerbore = 2 + 0.01
+    bitter = Bitter(
+        "B", [1, 2], [-1, 1], True, Axi, coolingSlits, tierod, innerbore, outerbore
+    )
+    bitter.dump()
+
+    with open("B.yaml", "r") as f:
+        bitter = yaml.load(f, Loader=yaml.FullLoader)
+
+    print(bitter)
+    for i, slit in enumerate(bitter.coolingslits):
+        print(f"slit[{i}]: {slit}, shape={slit.shape}")

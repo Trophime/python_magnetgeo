@@ -9,6 +9,7 @@ import json
 import yaml
 from . import deserialize
 
+
 class InnerCurrentLead(yaml.YAMLObject):
     """
     name :
@@ -18,9 +19,18 @@ class InnerCurrentLead(yaml.YAMLObject):
     support: [R2, DZ]
     fillet:
     """
-    yaml_tag = 'InnerCurrentLead'
 
-    def __init__(self, name="None", r=[], h=0., holes=[], support=[], fillet=False):
+    yaml_tag = "InnerCurrentLead"
+
+    def __init__(
+        self,
+        name: str,
+        r: list[float],
+        h: float = 0.0,
+        holes: list = [],
+        support: list = [],
+        fillet: bool = False,
+    ) -> None:
         """
         initialize object
         """
@@ -35,22 +45,22 @@ class InnerCurrentLead(yaml.YAMLObject):
         """
         representation of object
         """
-        return "%s(name=%r, r=%r, h=%r, holes=%r, support=%r, fillet=%r)" % \
-               (self.__class__.__name__,
-                self.name,
-                self.r,
-                self.h,
-                self.holes,
-                self.support,
-                self.fillet
-               )
+        return "%s(name=%r, r=%r, h=%r, holes=%r, support=%r, fillet=%r)" % (
+            self.__class__.__name__,
+            self.name,
+            self.r,
+            self.h,
+            self.holes,
+            self.support,
+            self.fillet,
+        )
 
     def dump(self):
         """
         dump object to file
         """
         try:
-            yaml.dump(self, open(self._name + '.yaml', 'w'))
+            yaml.dump(self, open(f"{self._name}.yaml", "w"))
         except:
             raise Exception("Failed to dump InnerCurrentLead data")
 
@@ -60,11 +70,10 @@ class InnerCurrentLead(yaml.YAMLObject):
         """
         data = None
         try:
-            istream = open(self._name + '.yaml', 'r')
-            data = yaml.load(istream)
-            istream.close()
+            with open(f"{self._name}.yaml", "r") as istream:
+                data = yaml.load(istream, Loader=yaml.FullLoader)
         except:
-            raise Exception("Failed to load InnerCurrentLead data %s.yaml"%self._name)
+            raise Exception(f"Failed to load InnerCurrentLead data {self._name}.yaml")
 
         self._name = data.name
         self.r = data.r
@@ -77,14 +86,14 @@ class InnerCurrentLead(yaml.YAMLObject):
         """
         convert from yaml to json
         """
-        return json.dumps(self, default=deserialize.serialize_instance, \
-                          sort_keys=True, indent=4)
+        return json.dumps(
+            self, default=deserialize.serialize_instance, sort_keys=True, indent=4
+        )
 
-    def from_json(self, string):
+    def from_json(self, string: str):
         """
         convert from json to yaml
         """
-        print ("from_json(%s)" % string)
         return json.loads(string, object_hook=deserialize.unserialize_object)
 
     def write_to_json(self):
@@ -93,29 +102,18 @@ class InnerCurrentLead(yaml.YAMLObject):
         """
         jsondata = self.to_json()
         try:
-            ofile = open(self.name + '.json', 'w')
-            ofile.write(str(jsondata))
-            ofile.close()
+            with open(f"{self.name}.json", "w") as ofile:
+                ofile.write(str(jsondata))
         except:
-            raise Exception("Failed to write to %s.json"%self.name)
+            raise Exception(f"Failed to write to {self.name}.json")
 
     def read_from_json(self):
         """
         read from json file
         """
-        istream = open(self.name + '.json', 'r')
-        jsondata = self.from_json(istream.read())
-        istream.close()
-        print (type(jsondata))
-        print (jsondata.name)
-        try:
-            print (jsondata.r)
-        except:
-            pass
-        print (jsondata.h)
-        print (jsondata.holes)
-        print (jsondata.support)
-        print (jsondata.fillet)
+        with open(f"{self.name}.json", "r") as istream:
+            jsondata = self.from_json(istream.read())
+
 
 def InnerCurrentLead_constructor(loader, node):
     """
@@ -131,30 +129,36 @@ def InnerCurrentLead_constructor(loader, node):
     return InnerCurrentLead(name, r, h, holes, support, fillet)
 
 
-yaml.add_constructor(u'!InnerCurrentLead', InnerCurrentLead_constructor)
+yaml.add_constructor("!InnerCurrentLead", InnerCurrentLead_constructor)
 
 #
 # To operate from command line
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("name", help="name of the inner currentlead model to be stored", type=str, nargs='?' )
-    parser.add_argument("--tojson", help="convert to json", action='store_true')
+    parser.add_argument(
+        "name",
+        help="name of the inner currentlead model to be stored",
+        type=str,
+        nargs="?",
+    )
+    parser.add_argument("--tojson", help="convert to json", action="store_true")
     args = parser.parse_args()
 
     if not args.name:
-        r = [38.6/2., 48.4/2.]
-        h = 480.
+        r = [38.6 / 2.0, 48.4 / 2.0]
+        h = 480.0
         bars = [123, 12, 90, 60, 45, 3]
         support = [24.2, 0]
-        lead = InnerCurrentLead('Inner', r, 480., bars, support, False)
+        lead = InnerCurrentLead("Inner", r, 480.0, bars, support, False)
         lead.dump()
-    else:    
+    else:
         lead = None
-        with open(args.name, 'r') as f:
-            lead = yaml.load(f)
-        print ("lead=", lead)
+        with open(args.name, "r") as f:
+            lead = yaml.load(f, Loader=yaml.FullLoader)
+        print("lead=", lead)
 
     if args.tojson:
         lead.write_to_json()

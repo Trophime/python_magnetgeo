@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
 """
 Provides definiton for Helix:
@@ -21,6 +21,7 @@ from . import deserialize
 from . import Shape
 from . import ModelAxi
 
+
 class Model3D(yaml.YAMLObject):
     """
     cad :
@@ -28,9 +29,11 @@ class Model3D(yaml.YAMLObject):
     with_channels :
     """
 
-    yaml_tag = 'Model3D'
+    yaml_tag = "Model3D"
 
-    def __init__(self, cad='', with_shapes=False, with_channels=False):
+    def __init__(
+        self, cad: str, with_shapes: bool = False, with_channels: bool = False
+    ) -> None:
         """
         initialize object
         """
@@ -42,20 +45,22 @@ class Model3D(yaml.YAMLObject):
         """
         representation of object
         """
-        return "%s(cad=%r, with_shapes=%r, with_channels=%r)" % \
-               (self.__class__.__name__,
-                self.cad,
-                self.with_shapes,
-                self.with_channels
-               )
+        return "%s(cad=%r, with_shapes=%r, with_channels=%r)" % (
+            self.__class__.__name__,
+            self.cad,
+            self.with_shapes,
+            self.with_channels,
+        )
 
     def to_json(self):
         """
         convert from yaml to json
         """
-        return json.dumps(self, default=deserialize.serialize_instance, sort_keys=True, indent=4)
+        return json.dumps(
+            self, default=deserialize.serialize_instance, sort_keys=True, indent=4
+        )
 
-    def from_json(string):
+    def from_json(self, string: str):
         """
         convert from json to yaml
         """
@@ -73,4 +78,4 @@ def Model3D_constructor(loader, node):
     return Model3D(cad, with_shapes, with_channels)
 
 
-yaml.add_constructor(u'!Model3D', Model3D_constructor)
+yaml.add_constructor(u"!Model3D", Model3D_constructor)
